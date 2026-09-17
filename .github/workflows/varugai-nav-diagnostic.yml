@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - diagnostic/varugai-nav-insets-353aff20
+  pull_request:
+    branches:
+      - claude/varugai-android-release
   workflow_dispatch:
 
 permissions:
