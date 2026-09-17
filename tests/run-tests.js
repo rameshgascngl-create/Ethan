@@ -60,8 +60,20 @@ check('no eval() or Function() in shipped renderer code', () => {
 });
 
 check('renderer boots inside Electron with a working native bridge', () => {
-  const electronBin = path.join(ROOT, 'node_modules', '.bin', 'electron' + (process.platform === 'win32' ? '.cmd' : ''));
-  if (!fs.existsSync(electronBin)) throw new Error('electron is not installed (run npm install)');
+  // require('electron') resolves to the real platform binary (electron.exe on
+  // Windows, not the node_modules/.bin/electron.cmd shell shim) — spawning a
+  // .cmd directly without `shell: true` silently fails on Windows, which is
+  // exactly what happened on windows-latest CI: spawnSync came back with no
+  // output at all rather than a real error.
+  let electronBin;
+  try {
+    electronBin = require('electron');
+  } catch (e) {
+    throw new Error('electron is not installed (run npm install): ' + e.message);
+  }
+  if (!electronBin || !fs.existsSync(electronBin)) {
+    throw new Error('electron binary not found at ' + electronBin);
+  }
 
   // Start from a clean isolated profile every run (electron/main.js routes
   // VARUGAI_SMOKE_TEST to a temp userData dir, never the real %APPDATA%\VARUGAI).
@@ -80,6 +92,9 @@ check('renderer boots inside Electron with a working native bridge', () => {
     timeout: 30000,
     encoding: 'utf8',
   });
+  if (result.error) {
+    throw new Error('failed to launch Electron (' + cmd + '): ' + result.error.message);
+  }
   const out = (result.stdout || '') + (result.stderr || '');
   if (!out.includes('[smoke] bridge present: true')) {
     throw new Error('window.VarugaiNative bridge did not initialise:\n' + out.slice(-2000));
