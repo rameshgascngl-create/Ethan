@@ -34,6 +34,14 @@ function main() {
   const outFile = path.join(RELEASE_DIR, 'SHA-256SUMS.txt');
   fs.writeFileSync(outFile, lines.join('\n') + '\n');
   console.log(lines.join('\n'));
+  // Sizes are logged separately (not written into SHA-256SUMS.txt, which stays
+  // in the conventional "hash  filename" shape) so a CI log or a release
+  // reviewer can confirm exact byte counts without downloading the artifact.
+  console.log('\nSizes:');
+  files.forEach((f) => {
+    const bytes = fs.statSync(path.join(RELEASE_DIR, f)).size;
+    console.log(`  ${f}: ${bytes} bytes`);
+  });
   console.log('\nWritten to', outFile);
 }
 

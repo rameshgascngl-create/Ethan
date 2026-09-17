@@ -56,6 +56,16 @@ jobs:
           $hash = (Get-FileHash "release/VARUGAI-$version-source.zip" -Algorithm SHA256).Hash.ToLower()
           Add-Content -Path "release/SHA-256SUMS.txt" -Value "$hash  VARUGAI-$version-source.zip"
 
+      - name: Print artifact summary (name, exact byte size, SHA-256)
+        shell: pwsh
+        run: |
+          Get-ChildItem release -File | Where-Object { $_.Extension -in '.exe', '.zip' } | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "{0,-45} {1,15} bytes  sha256:{2}" -f $_.Name, $_.Length, $hash
+          }
+          "---- SHA-256SUMS.txt ----"
+          Get-Content release/SHA-256SUMS.txt
+
       - name: Upload installer and portable build
         uses: actions/upload-artifact@v4
         with:
