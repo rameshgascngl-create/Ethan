@@ -1,0 +1,70 @@
+name: VARUGAI navigation geometry diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/varugai-nav-insets-353aff20
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geometry:
+    name: Capture portrait and landscape WebView geometry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Prove frozen application source is still the parent baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 353aff20f3a2579f792fd02892280c9879b4ca23 -- \
+            android/app/src/main/java/com/gasczoology/varugai/MainActivity.kt \
+            android/app/src/main/assets/index.html \
+            android/app/src/main/assets/styles.css \
+            android/app/src/main/assets/app.js \
+            android/app/src/main/AndroidManifest.xml \
+            android/app/build.gradle.kts
+          echo 'Frozen functional/layout sources remain unchanged on the diagnostic branch.'
+
+      - name: Inject diagnostic-only logging into CI workspace
+        run: python3 diagnostics/varugai_nav_geometry/instrument.py
+
+      - name: Build distinct debug diagnostic APK
+        working-directory: android
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Capture three-button portrait/landscape geometry
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          target: google_apis
+          profile: pixel_3a
+          disable-animations: true
+          script: bash diagnostics/varugai_nav_geometry/run_geometry.sh
+
+      - name: Upload diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARUGAI-353aff20-navigation-geometry-diagnostic
+          path: diagnostics/varugai_nav_geometry/evidence/
+          if-no-files-found: warn
+          retention-days: 14
