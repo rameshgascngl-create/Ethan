@@ -62,11 +62,15 @@ jobs:
       - name: Run Android fail-closed source gate
         run: python3 android/tools/verify_release_source.py
 
-      - name: Set up Android SDK packages
+      - name: Set up Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 36 and build tools
         shell: bash
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0'
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
