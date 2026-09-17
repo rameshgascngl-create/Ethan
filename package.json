@@ -1,0 +1,77 @@
+{
+  "name": "varugai-desktop",
+  "productName": "VARUGAI 15",
+  "version": "15.1.0",
+  "description": "VARUGAI 15 — Semester Attendance Management System, offline Windows desktop application",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "R. Ramesh",
+    "email": "rameshgascngl@gmail.com"
+  },
+  "main": "electron/main.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "icons": "node scripts/generate-icons.js",
+    "pretest": "node scripts/syntax-check.js",
+    "test": "node tests/run-tests.js",
+    "checksums": "node scripts/make-checksums.js",
+    "dist:win": "npm run icons && electron-builder --win nsis portable dir",
+    "dist:win:nsis": "npm run icons && electron-builder --win nsis",
+    "dist:win:portable": "npm run icons && electron-builder --win portable",
+    "dist:win:unpacked": "npm run icons && electron-builder --win dir"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "org.varugai.desktop15",
+    "productName": "VARUGAI 15",
+    "copyright": "Copyright © R. Ramesh, Department of Zoology, Government Arts and Science College, Nagercoil",
+    "asar": true,
+    "compression": "maximum",
+    "files": [
+      "electron/**/*",
+      "app/**/*",
+      "assets/icon.png",
+      "assets/icon.ico",
+      "package.json",
+      "!**/*.md",
+      "!**/*.map"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "dir", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "artifactName": "VARUGAI-${version}-Setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VARUGAI 15",
+      "menuCategory": false,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "portable": {
+      "artifactName": "VARUGAI-${version}-Portable.${ext}"
+    },
+    "publish": null
+  }
+}

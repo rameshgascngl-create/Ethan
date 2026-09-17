@@ -1,0 +1,85 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate application icons
+        run: npm run icons
+
+      - name: Run tests (syntax check + Electron smoke test)
+        run: npm test
+
+      - name: Build Windows installer, portable build and unpacked directory
+        run: npx electron-builder --win nsis portable dir --publish never
+
+      - name: Generate SHA-256 checksums
+        run: npm run checksums
+
+      - name: Zip the unpacked build
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          Compress-Archive -Path "release/win-unpacked/*" -DestinationPath "release/VARUGAI-$version-win-unpacked.zip"
+          $hash = (Get-FileHash "release/VARUGAI-$version-win-unpacked.zip" -Algorithm SHA256).Hash.ToLower()
+          Add-Content -Path "release/SHA-256SUMS.txt" -Value "$hash  VARUGAI-$version-win-unpacked.zip"
+
+      - name: Create source archive
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          git archive --format=zip --output="release/VARUGAI-$version-source.zip" HEAD
+          $hash = (Get-FileHash "release/VARUGAI-$version-source.zip" -Algorithm SHA256).Hash.ToLower()
+          Add-Content -Path "release/SHA-256SUMS.txt" -Value "$hash  VARUGAI-$version-source.zip"
+
+      - name: Print artifact summary (name, exact byte size, SHA-256)
+        shell: pwsh
+        run: |
+          Get-ChildItem release -File | Where-Object { $_.Extension -in '.exe', '.zip' } | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "{0,-45} {1,15} bytes  sha256:{2}" -f $_.Name, $_.Length, $hash
+          }
+          "---- SHA-256SUMS.txt ----"
+          Get-Content release/SHA-256SUMS.txt
+
+      - name: Upload installer and portable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARUGAI-15-windows-installers
+          path: |
+            release/*.exe
+            release/SHA-256SUMS.txt
+          if-no-files-found: error
+
+      - name: Upload unpacked build and source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARUGAI-15-windows-unpacked-and-source
+          path: |
+            release/*win-unpacked.zip
+            release/*source.zip
+          if-no-files-found: error
