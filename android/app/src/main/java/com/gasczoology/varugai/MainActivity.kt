@@ -20,10 +20,12 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -97,14 +99,29 @@ class MainActivity : AppCompatActivity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
+        val rootContainer = FrameLayout(this)
         webView = WebView(this)
-        setContentView(webView)
+        webView.setPadding(0, 0, 0, 0)
+        rootContainer.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        setContentView(rootContainer)
 
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
+        val handledInsetTypes =
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+        ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { view, insets ->
+            val safe = insets.getInsets(handledInsetTypes)
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+
+            WindowInsetsCompat.Builder(insets)
+                .setInsets(handledInsetTypes, Insets.NONE)
+                .build()
         }
+        ViewCompat.requestApplyInsets(rootContainer)
 
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
