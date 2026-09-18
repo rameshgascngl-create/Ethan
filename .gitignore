@@ -6,3 +6,11 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 *.tmp-*
+
+# Android release signing material must never be committed.
+*.jks
+*.keystore
+keystore.properties
+android/local.properties
+android/.gradle/
+android/**/build/
