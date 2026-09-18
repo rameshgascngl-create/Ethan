@@ -46,8 +46,8 @@ css = text(ASSETS / "styles.css")
 
 # Android identity and release posture.
 require('applicationId = "com.gasczoology.varugai"' in gradle, "wrong/missing applicationId")
-require('versionCode = 15101' in gradle, "wrong/missing versionCode")
-require('versionName = "15.1.1"' in gradle, "wrong/missing versionName")
+require('versionCode = 15102' in gradle, "wrong/missing versionCode")
+require('versionName = "15.1.2"' in gradle, "wrong/missing versionName")
 require('minSdk = 24' in gradle, "wrong/missing minSdk")
 require('targetSdk = 36' in gradle, "wrong/missing targetSdk")
 require('compileSdk = 36' in gradle, "wrong/missing compileSdk")
@@ -55,6 +55,10 @@ require('System.getenv("VARUGAI_KEYSTORE_FILE")' in gradle, "release keystore fi
 require('System.getenv("VARUGAI_KEYSTORE_PASSWORD")' in gradle, "keystore password is not injected from CI")
 require('System.getenv("VARUGAI_KEY_ALIAS")' in gradle, "key alias is not injected from CI")
 require('System.getenv("VARUGAI_KEY_PASSWORD")' in gradle, "key password is not injected from CI")
+
+# Launcher branding: the approved VARUGAI attendance/check-book icon is the packaged app icon.
+require('android:icon="@mipmap/ic_launcher"' in manifest, "approved launcher icon is not configured")
+require('android:roundIcon="@mipmap/ic_launcher"' in manifest, "round launcher icon is not configured")
 
 # Privacy/security: the installed APK must be structurally offline.
 require('android.permission.INTERNET' not in manifest, "INTERNET permission declared")
