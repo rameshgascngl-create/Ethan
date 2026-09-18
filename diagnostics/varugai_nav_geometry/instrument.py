@@ -67,11 +67,11 @@ helper = r'''
         Log.i(DIAG_TAG, message)
         try {
             File(filesDir, DIAG_FILE).appendText(
-                "${System.currentTimeMillis()} $message\\n",
+                "${System.currentTimeMillis()} $message\n",
                 Charsets.UTF_8
             )
         } catch (_: Exception) {
-            // Diagnostic evidence only; never affect app behaviour.
+            // Diagnostic-only evidence must never affect application behaviour.
         }
     }
 
@@ -97,6 +97,22 @@ helper = r'''
               var cs=n?window.getComputedStyle(n):null;
               var r=n?n.getBoundingClientRect():null;
               var vv=window.visualViewport;
+              var chain=[];
+              var e=n;
+              while(e && chain.length<12){
+                var es=window.getComputedStyle(e);
+                chain.push({
+                  tag:e.tagName,
+                  id:e.id||'',
+                  cls:e.className||'',
+                  overflow:es.overflow,
+                  overflowX:es.overflowX,
+                  overflowY:es.overflowY,
+                  transform:es.transform,
+                  position:es.position
+                });
+                e=e.parentElement;
+              }
               return JSON.stringify({
                 navExists:!!n,
                 display:cs?cs.display:null,
@@ -105,18 +121,26 @@ helper = r'''
                 bottom:cs?cs.bottom:null,
                 height:cs?cs.height:null,
                 zIndex:cs?cs.zIndex:null,
+                transform:cs?cs.transform:null,
+                paddingBottom:cs?cs.paddingBottom:null,
                 rect:r?{top:r.top,bottom:r.bottom,height:r.height,left:r.left,right:r.right,width:r.width}:null,
                 innerWidth:window.innerWidth,
                 innerHeight:window.innerHeight,
                 clientWidth:document.documentElement.clientWidth,
                 clientHeight:document.documentElement.clientHeight,
+                bodyClientHeight:document.body?document.body.clientHeight:null,
+                bodyScrollHeight:document.body?document.body.scrollHeight:null,
+                scrollY:window.scrollY,
                 visualViewport:vv?{
                   width:vv.width,
                   height:vv.height,
                   offsetTop:vv.offsetTop,
                   offsetLeft:vv.offsetLeft,
+                  pageTop:vv.pageTop,
+                  pageLeft:vv.pageLeft,
                   scale:vv.scale
-                }:null
+                }:null,
+                ancestors:chain
               });
             })();
         """.trimIndent()
@@ -126,14 +150,9 @@ helper = r'''
         }
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && ::webView.isInitialized) {
-            webView.postDelayed({ dumpDiagnosticGeometry("windowFocus") }, 500L)
-        }
-    }
-
-    private fun handleNormalBack() {\n",
+'''
+replace_once(
+    "    private fun handleNormalBack() {\n",
     helper + "    private fun handleNormalBack() {\n",
     "geometry helper insertion",
 )
