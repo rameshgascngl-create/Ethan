@@ -1,0 +1,108 @@
+name: VARUGAI physical-device navigation diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/varugai-nav-insets-353aff20
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic-apk:
+    name: Build instrumentation-only physical diagnostic APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove frozen release/functional source is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          FROZEN=353aff20f3a2579f792fd02892280c9879b4ca23
+          git diff --exit-code "$FROZEN" -- \
+            android/app/src/main/java/com/gasczoology/varugai/MainActivity.kt \
+            android/app/src/main/assets/index.html \
+            android/app/src/main/assets/styles.css \
+            android/app/src/main/assets/app.js \
+            android/app/src/main/AndroidManifest.xml \
+            android/app/build.gradle.kts
+          echo 'Frozen functional/layout source is byte-for-byte unchanged on the diagnostic branch.'
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Inject diagnostic-only runtime instrumentation into CI workspace
+        run: python3 diagnostics/varugai_nav_geometry/instrument.py
+
+      - name: Build distinct debug diagnostic APK
+        working-directory: android
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Stage physical-device diagnostic package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-output
+          SRC='android/app/build/outputs/apk/debug/app-debug.apk'
+          DST='diagnostic-output/VARUGAI-15.1.0-353aff20-nav-diagnostic.apk'
+          test -s "$SRC"
+          cp "$SRC" "$DST"
+          sha256sum "$DST" | tee diagnostic-output/SHA256SUMS.txt
+          {
+            echo 'purpose=INSTRUMENTATION_ONLY_NOT_RELEASE_CANDIDATE'
+            echo 'frozen_parent=353aff20f3a2579f792fd02892280c9879b4ca23'
+            echo "diagnostic_commit=${GITHUB_SHA}"
+            echo 'applicationId=com.gasczoology.varugai.debug'
+            echo 'versionName=15.1.0-debug'
+            echo 'versionCode=15100'
+            echo 'layout_changes=NONE'
+            echo 'css_changes=NONE'
+            echo 'inset_handling_changes=NONE'
+            echo 'navigation_behavior_changes=NONE'
+            echo 'persistence_logic_changes=NONE'
+          } | tee diagnostic-output/DIAGNOSTIC_IDENTITY.txt
+          cat > diagnostic-output/ADB_CAPTURE.txt <<'EOF'
+          PHYSICAL DEVICE CAPTURE
+          Package: com.gasczoology.varugai.debug
+          Internal evidence file: files/varugai-nav-geometry.jsonl
+
+          1. Enable Developer options and USB debugging on the Android phone.
+          2. Connect phone to a computer with Android platform-tools/adb.
+          3. Confirm: adb devices
+          4. Clear only the diagnostic app data before measurement:
+             adb shell pm clear com.gasczoology.varugai.debug
+          5. Launch diagnostic app:
+             adb shell monkey -p com.gasczoology.varugai.debug -c android.intent.category.LAUNCHER 1
+          6. Keep portrait until the Setup page is visible; wait 3 seconds.
+          7. Rotate to landscape; wait 3 seconds.
+          8. Rotate back to portrait; wait 3 seconds.
+          9. Retrieve the complete diagnostic file:
+             adb shell run-as com.gasczoology.varugai.debug cat files/varugai-nav-geometry.jsonl > varugai-nav-geometry.jsonl
+          10. Optional filtered Logcat:
+             adb logcat -d -s VARUGAI_DIAG:I > varugai-nav-logcat.txt
+
+          This debug package is evidence-generation tooling only.
+          EOF
+
+      - name: Upload physical-device diagnostic APK and evidence instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: VARUGAI-353aff20-physical-nav-diagnostic
+          path: diagnostic-output/
+          if-no-files-found: error
+          retention-days: 14
