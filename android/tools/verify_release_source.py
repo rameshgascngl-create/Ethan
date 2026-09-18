@@ -46,8 +46,8 @@ css = text(ASSETS / "styles.css")
 
 # Android identity and release posture.
 require('applicationId = "com.gasczoology.varugai"' in gradle, "wrong/missing applicationId")
-require('versionCode = 15102' in gradle, "wrong/missing versionCode")
-require('versionName = "15.1.2"' in gradle, "wrong/missing versionName")
+require('versionCode = 15103' in gradle, "wrong/missing versionCode")
+require('versionName = "15.1.3"' in gradle, "wrong/missing versionName")
 require('minSdk = 24' in gradle, "wrong/missing minSdk")
 require('targetSdk = 36' in gradle, "wrong/missing targetSdk")
 require('compileSdk = 36' in gradle, "wrong/missing compileSdk")
