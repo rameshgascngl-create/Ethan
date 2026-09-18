@@ -24,7 +24,7 @@ replace_once(
 )
 replace_once(
     "        private const val EXIT_WINDOW_MS = 2200L\n",
-    "        private const val EXIT_WINDOW_MS = 2200L\n        private const val DIAG_TAG = \"VARUGAI_DIAG\"\n",
+    "        private const val EXIT_WINDOW_MS = 2200L\n        private const val DIAG_TAG = \"VARUGAI_DIAG\"\n        private const val DIAG_FILE = \"varugai-nav-geometry.jsonl\"\n",
     "diagnostic tag",
 )
 
