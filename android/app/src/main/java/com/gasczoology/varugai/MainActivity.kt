@@ -12,6 +12,8 @@ import android.os.SystemClock
 import android.print.PrintAttributes
 import android.print.PrintManager
 import android.util.Base64
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -24,6 +26,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -97,14 +100,31 @@ class MainActivity : AppCompatActivity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
+        val insetContainer = FrameLayout(this)
         webView = WebView(this)
-        setContentView(webView)
+        insetContainer.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
 
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
+        // The native parent owns system-bar and cutout compensation. Keeping the
+        // WebView itself unpadded makes its CSS viewport equal the safe content rect,
+        // so fixed HTML navigation at bottom:0 cannot fall into native View padding.
+        val handledInsetTypes =
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+        ViewCompat.setOnApplyWindowInsetsListener(insetContainer) { view, insets ->
+            val safe = insets.getInsets(handledInsetTypes)
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+            WindowInsetsCompat.Builder(insets)
+                .setInsets(handledInsetTypes, Insets.NONE)
+                .build()
         }
+
+        setContentView(insetContainer)
+        ViewCompat.requestApplyInsets(insetContainer)
 
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 

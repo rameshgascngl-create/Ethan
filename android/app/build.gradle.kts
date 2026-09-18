@@ -11,8 +11,8 @@ android {
         applicationId = "com.gasczoology.varugai"
         minSdk = 24
         targetSdk = 36
-        versionCode = 15100
-        versionName = "15.1.0"
+        versionCode = 15101
+        versionName = "15.1.1"
     }
 
     val releaseStore = System.getenv("VARUGAI_KEYSTORE_FILE")
