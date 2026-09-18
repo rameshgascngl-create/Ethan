@@ -36,10 +36,11 @@ old_insets = '''        ViewCompat.setOnApplyWindowInsetsListener(webView) { vie
 '''
 new_insets = '''        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            Log.i(
-                DIAG_TAG,
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            diagnosticRecord(
                 "INSETS_CALLBACK orientation=${diagnosticOrientation()} " +
                     "bars=${bars.left},${bars.top},${bars.right},${bars.bottom} " +
+                    "cutout=${cutout.left},${cutout.top},${cutout.right},${cutout.bottom} " +
                     "paddingBefore=${view.paddingLeft},${view.paddingTop},${view.paddingRight},${view.paddingBottom}"
             )
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -62,18 +63,32 @@ helper = r'''
         else -> "undefined"
     }
 
+    private fun diagnosticRecord(message: String) {
+        Log.i(DIAG_TAG, message)
+        try {
+            File(filesDir, DIAG_FILE).appendText(
+                "${System.currentTimeMillis()} $message\\n",
+                Charsets.UTF_8
+            )
+        } catch (_: Exception) {
+            // Diagnostic evidence only; never affect app behaviour.
+        }
+    }
+
     private fun dumpDiagnosticGeometry(reason: String) {
         if (!::webView.isInitialized) return
         val orientation = diagnosticOrientation()
-        val bars = ViewCompat.getRootWindowInsets(webView)
-            ?.getInsets(WindowInsetsCompat.Type.systemBars())
-        Log.i(
-            DIAG_TAG,
+        val rootInsets = ViewCompat.getRootWindowInsets(webView)
+        val bars = rootInsets?.getInsets(WindowInsetsCompat.Type.systemBars())
+        val cutout = rootInsets?.getInsets(WindowInsetsCompat.Type.displayCutout())
+        diagnosticRecord(
             "NATIVE reason=$reason orientation=$orientation " +
-                "measured=${webView.measuredWidth}x${webView.measuredHeight} " +
-                "size=${webView.width}x${webView.height} " +
-                "padding=${webView.paddingLeft},${webView.paddingTop},${webView.paddingRight},${webView.paddingBottom} " +
-                "bars=${bars?.left ?: -1},${bars?.top ?: -1},${bars?.right ?: -1},${bars?.bottom ?: -1}"
+                "measuredWidth=${webView.measuredWidth} measuredHeight=${webView.measuredHeight} " +
+                "width=${webView.width} height=${webView.height} " +
+                "paddingLeft=${webView.paddingLeft} paddingTop=${webView.paddingTop} " +
+                "paddingRight=${webView.paddingRight} paddingBottom=${webView.paddingBottom} " +
+                "systemBars=${bars?.left ?: -1},${bars?.top ?: -1},${bars?.right ?: -1},${bars?.bottom ?: -1} " +
+                "displayCutout=${cutout?.left ?: -1},${cutout?.top ?: -1},${cutout?.right ?: -1},${cutout?.bottom ?: -1}"
         )
 
         val script = """
@@ -82,22 +97,6 @@ helper = r'''
               var cs=n?window.getComputedStyle(n):null;
               var r=n?n.getBoundingClientRect():null;
               var vv=window.visualViewport;
-              var chain=[];
-              var e=n;
-              while(e && chain.length<12){
-                var es=window.getComputedStyle(e);
-                chain.push({
-                  tag:e.tagName,
-                  id:e.id||'',
-                  cls:e.className||'',
-                  overflow:es.overflow,
-                  overflowX:es.overflowX,
-                  overflowY:es.overflowY,
-                  transform:es.transform,
-                  position:es.position
-                });
-                e=e.parentElement;
-              }
               return JSON.stringify({
                 navExists:!!n,
                 display:cs?cs.display:null,
@@ -106,38 +105,35 @@ helper = r'''
                 bottom:cs?cs.bottom:null,
                 height:cs?cs.height:null,
                 zIndex:cs?cs.zIndex:null,
-                transform:cs?cs.transform:null,
-                paddingBottom:cs?cs.paddingBottom:null,
                 rect:r?{top:r.top,bottom:r.bottom,height:r.height,left:r.left,right:r.right,width:r.width}:null,
                 innerWidth:window.innerWidth,
                 innerHeight:window.innerHeight,
                 clientWidth:document.documentElement.clientWidth,
                 clientHeight:document.documentElement.clientHeight,
-                bodyClientHeight:document.body?document.body.clientHeight:null,
-                bodyScrollHeight:document.body?document.body.scrollHeight:null,
-                scrollY:window.scrollY,
                 visualViewport:vv?{
                   width:vv.width,
                   height:vv.height,
                   offsetTop:vv.offsetTop,
                   offsetLeft:vv.offsetLeft,
-                  pageTop:vv.pageTop,
-                  pageLeft:vv.pageLeft,
                   scale:vv.scale
-                }:null,
-                ancestors:chain
+                }:null
               });
             })();
         """.trimIndent()
 
         webView.evaluateJavascript(script) { result ->
-            Log.i(DIAG_TAG, "WEB reason=$reason orientation=$orientation result=$result")
+            diagnosticRecord("WEB reason=$reason orientation=$orientation result=$result")
         }
     }
 
-'''
-replace_once(
-    "    private fun handleNormalBack() {\n",
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && ::webView.isInitialized) {
+            webView.postDelayed({ dumpDiagnosticGeometry("windowFocus") }, 500L)
+        }
+    }
+
+    private fun handleNormalBack() {\n",
     helper + "    private fun handleNormalBack() {\n",
     "geometry helper insertion",
 )
