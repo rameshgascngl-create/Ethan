@@ -42,11 +42,12 @@ gradle = text(ANDROID / "app" / "build.gradle.kts")
 host = text(ANDROID / "app" / "src" / "main" / "java" / "com" / "gasczoology" / "varugai" / "MainActivity.kt")
 js = text(ASSETS / "app.js")
 html = text(ASSETS / "index.html")
+css = text(ASSETS / "styles.css")
 
 # Android identity and release posture.
 require('applicationId = "com.gasczoology.varugai"' in gradle, "wrong/missing applicationId")
-require('versionCode = 15100' in gradle, "wrong/missing versionCode")
-require('versionName = "15.1.0"' in gradle, "wrong/missing versionName")
+require('versionCode = 15101' in gradle, "wrong/missing versionCode")
+require('versionName = "15.1.1"' in gradle, "wrong/missing versionName")
 require('minSdk = 24' in gradle, "wrong/missing minSdk")
 require('targetSdk = 36' in gradle, "wrong/missing targetSdk")
 require('compileSdk = 36' in gradle, "wrong/missing compileSdk")
@@ -71,6 +72,32 @@ require('fun saveExcel' not in host, "Android bridge must not expose saveExcel; 
 require('fun saveBase64' in host and 'fun printPage' in host and 'fun recoverySnapshot' in host,
         "required native bridge methods missing")
 
+
+# Device-QA regression gate for the native inset correction.
+require('val rootContainer = FrameLayout(this)' in host, "inset-aware native root container missing")
+require('webView.setPadding(0, 0, 0, 0)' in host, "WebView must remain unpadded by handled system-bar insets")
+require('ViewCompat.setOnApplyWindowInsetsListener(rootContainer)' in host,
+        "window inset listener must be attached to the native root container")
+require('ViewCompat.setOnApplyWindowInsetsListener(webView)' not in host,
+        "system-bar insets must not be applied directly to WebView")
+require('WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' in host,
+        "system-bar/display-cutout inset mask missing")
+require('view.setPadding(safe.left, safe.top, safe.right, safe.bottom)' in host,
+        "safe insets are not applied to the native root container")
+require('.setInsets(handledInsetTypes, Insets.NONE)' in host,
+        "handled native insets are not coordinated before child dispatch")
+require('ViewCompat.requestApplyInsets(rootContainer)' in host,
+        "root container does not request dynamic inset application")
+require('onBackPressedDispatcher.addCallback' in host and 'handleNormalBack()' in host,
+        "Android Back handling changed or missing")
+
+# The web navigation payload must remain unchanged and fixed at the viewport bottom.
+for tab in ('setup', 'roster', 'grid', 'summary', 'data'):
+    require(f'data-t="{tab}"' in html, f"missing bottom navigation tab: {tab}")
+require('class="tabs" id="nav"' in html, "bottom navigation container missing")
+require('position:fixed' in css.replace(' ', ''), "fixed-bottom navigation positioning missing")
+require('bottom:0' in css.replace(' ', ''), "bottom navigation no longer anchored at bottom:0")
+
 # Browser-side network lock.
 require("connect-src 'none'" in html, "CSP connect-src is not locked to none")
 require("object-src 'none'" in html, "CSP object-src is not locked to none")
@@ -88,7 +115,8 @@ require("Completing the day records them ABSENT" in js, "completion blank-to-abs
 require("format:'varugai-backup',schema:2" in js, "backup format/schema identity changed")
 require('checksum:fnv(payload)' in js, "backup checksum generation missing")
 require('raw.checksum&&raw.checksum!==sum' in js, "backup checksum validation missing")
-require("const APPVER='15.1.0'" in js, "web payload version diverges from Android version")
+require("const APPVER='15.1.0'" in js,
+        "canonical web payload version changed; native 15.1.1 correction must not modify the web application payload")
 
 if failures:
     print("\nRELEASE SOURCE GATE: FAIL", file=sys.stderr)
