@@ -13,16 +13,15 @@ if [[ ! -s "$APK" ]]; then
 fi
 
 adb wait-for-device
+adb shell svc power stayon true || true
+adb shell input keyevent KEYCODE_WAKEUP || true
+adb shell locksettings set-disabled true || true
+adb shell wm dismiss-keyguard || true
+adb shell settings put secure immersive_mode_confirmations confirmed || true
+adb shell settings put system accelerometer_rotation 0 || true
 adb shell input keyevent 82 || true
-adb install -r "$APK"
 
-# Force classic three-button navigation when the emulator image exposes the
-# standard SystemUI navbar overlays. Keep fallbacks non-fatal because overlay
-# package names vary by API/system image.
-adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton || \
-adb shell cmd overlay enable --user 0 com.android.internal.systemui.navbar.threebutton || true
-adb shell settings put secure navigation_mode 0 || true
-sleep 2
+adb install -r "$APK"
 
 {
   echo "=== DEVICE ==="
@@ -35,8 +34,30 @@ sleep 2
   adb shell cmd overlay list 2>/dev/null | grep -E 'navbar|gestural|threebutton|twobutton' || true
 } > "$OUT/device.txt"
 
+wait_for_orientation() {
+  local want="$1"
+  local i
+  for i in $(seq 1 30); do
+    if adb shell dumpsys activity top 2>/dev/null | grep -m1 'mCurrentConfig=' | grep -q "$want"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for orientation marker: $want" >&2
+  adb shell dumpsys activity top >&2 || true
+  return 1
+}
+
+dismiss_system_overlays() {
+  adb shell settings put secure immersive_mode_confirmations confirmed || true
+  adb shell wm dismiss-keyguard || true
+  adb shell input keyevent KEYCODE_BACK || true
+  sleep 1
+}
+
 capture_stage() {
   local name="$1"
+  dismiss_system_overlays
   adb exec-out screencap -p > "$OUT/${name}.png"
   adb shell dumpsys window > "$OUT/${name}-window.txt" || true
   adb shell dumpsys activity top > "$OUT/${name}-activity.txt" || true
@@ -44,32 +65,34 @@ capture_stage() {
   adb logcat -d -v threadtime VARUGAI_DIAG:I '*:S' > "$OUT/${name}-geometry.log" || true
 }
 
-launch_stage() {
-  local rotation="$1"
-  local name="$2"
-  adb shell settings put system accelerometer_rotation 0
-  adb shell settings put system user_rotation "$rotation"
+lock_rotation() {
+  local rot="$1"
+  adb shell wm user-rotation lock "$rot" 2>/dev/null || {
+    adb shell settings put system accelerometer_rotation 0 || true
+    adb shell settings put system user_rotation "$rot" || true
+  }
+}
+
+launch_in_orientation() {
+  local rot="$1"
+  local marker="$2"
+  local name="$3"
+  lock_rotation "$rot"
   adb shell am force-stop "$PKG"
   adb logcat -c
   adb shell am start -W -n "$PKG/$ACTIVITY" > "$OUT/${name}-launch.txt"
-  sleep 5
+  wait_for_orientation "$marker"
+  sleep 3
   capture_stage "$name"
 }
 
-# 0 = portrait, 1 = 90-degree landscape on standard emulator images.
-launch_stage 0 portrait
+launch_in_orientation 0 " port " portrait
+launch_in_orientation 1 " land " landscape
 
-# Rotate the running application rather than relaunching from scratch so the
-# evidence also captures the normal Android configuration-change path.
 adb logcat -c
-adb shell settings put system user_rotation 1
-sleep 5
-capture_stage landscape
-
-# Return to portrait to verify the geometry after a full rotation cycle.
-adb logcat -c
-adb shell settings put system user_rotation 0
-sleep 5
+lock_rotation 0
+wait_for_orientation " port "
+sleep 3
 capture_stage portrait-return
 
 {
@@ -83,4 +106,5 @@ capture_stage portrait-return
   cat "$OUT/portrait-return-geometry.log"
 } > "$OUT/geometry-comparison.txt"
 
+cat "$OUT/device.txt"
 cat "$OUT/geometry-comparison.txt"
