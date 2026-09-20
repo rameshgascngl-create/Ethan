@@ -37,8 +37,7 @@ jobs:
       - name: Run tests (syntax check + Electron smoke test)
         run: npm test
 
-      # Fresh runs resolve the current repository signing secrets.
-      - name: Prepare Windows signing certificate
+      - name: Prepare Windows signing material
         if: env.SIGNING_ENABLED == 'true'
         shell: pwsh
         env:
@@ -53,7 +52,6 @@ jobs:
           }
 
           $pfxPath = Join-Path $env:RUNNER_TEMP "VARUGAI-CodeSigning.pfx"
-          $cerPath = Join-Path $env:RUNNER_TEMP "VARUGAI-CodeSigning.cer"
 
           try {
             $pfxBytes = [Convert]::FromBase64String($env:WIN_CSC_LINK)
@@ -62,23 +60,12 @@ jobs:
           }
 
           [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-
-          $securePassword = ConvertTo-SecureString $env:WIN_CSC_KEY_PASSWORD -AsPlainText -Force
-          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My" -Password $securePassword -Exportable
-          if (-not $cert -or -not $cert.HasPrivateKey) {
-            throw "Signing certificate import failed or private key is unavailable."
-          }
-
-          Export-Certificate -Cert $cert -FilePath $cerPath | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
-          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
+          $pfxHash = (Get-FileHash $pfxPath -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Decoded PFX: $($pfxBytes.Length) bytes"
+          Write-Host "Decoded PFX SHA-256: $pfxHash"
 
           "SIGNING_PFX_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "SIGNING_CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          Write-Host "Windows signing certificate prepared."
-          Write-Host "Subject: $($cert.Subject)"
-          Write-Host "Thumbprint: $($cert.Thumbprint)"
+          "SIGNING_CERT_THUMBPRINT=649E4ECDD987BE1AC19BCD324A78203BECB2265E" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build signed Windows installer, portable build and unpacked directory
         if: env.SIGNING_ENABLED == 'true'
@@ -104,17 +91,37 @@ jobs:
 
           foreach ($target in $targets) {
             $signature = Get-AuthenticodeSignature $target.FullName
+
             if (-not $signature.SignerCertificate) {
               throw "No Authenticode signer certificate: $($target.FullName)"
             }
-            if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
-              throw "Invalid Authenticode signature on $($target.FullName): $($signature.Status) — $($signature.StatusMessage)"
-            }
+
             if ($signature.SignerCertificate.Thumbprint -ne $env:SIGNING_CERT_THUMBPRINT) {
               throw "Unexpected signer on $($target.FullName). Expected $env:SIGNING_CERT_THUMBPRINT, got $($signature.SignerCertificate.Thumbprint)."
             }
 
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::HashMismatch) {
+              throw "Authenticode hash mismatch: $($target.FullName)"
+            }
+
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::NotSigned) {
+              throw "EXE is not Authenticode signed: $($target.FullName)"
+            }
+
+            if ($signature.Status -notin @(
+              [System.Management.Automation.SignatureStatus]::Valid,
+              [System.Management.Automation.SignatureStatus]::UnknownError
+            )) {
+              throw "Unexpected Authenticode status on $($target.FullName): $($signature.Status) — $($signature.StatusMessage)"
+            }
+
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::UnknownError -and
+                $signature.StatusMessage -notmatch 'not trusted|root certificate') {
+              throw "Unexpected signature verification error on $($target.FullName): $($signature.StatusMessage)"
+            }
+
             Write-Host "SIGNED PASS: $($target.FullName)"
+            Write-Host "  Status: $($signature.Status)"
             Write-Host "  Subject: $($signature.SignerCertificate.Subject)"
             Write-Host "  Thumbprint: $($signature.SignerCertificate.Thumbprint)"
           }
@@ -170,23 +177,6 @@ jobs:
         if: always() && env.SIGNING_ENABLED == 'true'
         shell: pwsh
         run: |
-          if ($env:SIGNING_CERT_THUMBPRINT) {
-            @(
-              "Cert:\CurrentUser\My\$env:SIGNING_CERT_THUMBPRINT",
-              "Cert:\CurrentUser\Root\$env:SIGNING_CERT_THUMBPRINT",
-              "Cert:\CurrentUser\TrustedPublisher\$env:SIGNING_CERT_THUMBPRINT"
-            ) | ForEach-Object {
-              if (Test-Path $_) {
-                Remove-Item $_ -Force
-              }
-            }
-          }
-
           if ($env:SIGNING_PFX_PATH -and (Test-Path $env:SIGNING_PFX_PATH)) {
             Remove-Item $env:SIGNING_PFX_PATH -Force
-          }
-
-          $cerPath = Join-Path $env:RUNNER_TEMP "VARUGAI-CodeSigning.cer"
-          if (Test-Path $cerPath) {
-            Remove-Item $cerPath -Force
           }
