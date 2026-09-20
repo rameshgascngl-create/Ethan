@@ -37,6 +37,7 @@ jobs:
       - name: Run tests (syntax check + Electron smoke test)
         run: npm test
 
+      # Fresh runs resolve the current repository signing secrets.
       - name: Prepare Windows signing certificate
         if: env.SIGNING_ENABLED == 'true'
         shell: pwsh
