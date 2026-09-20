@@ -15,6 +15,9 @@ jobs:
   build:
     name: Build and test on Windows
     runs-on: windows-latest
+    env:
+      SIGNING_ENABLED: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -34,8 +37,96 @@ jobs:
       - name: Run tests (syntax check + Electron smoke test)
         run: npm test
 
-      - name: Build Windows installer, portable build and unpacked directory
+      # Fresh secret validation after PFX/password rotation.
+      # Fresh validation after WIN_CSC_LINK refresh.
+      - name: Prepare Windows signing material
+        if: env.SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_LINK)) {
+            throw "WIN_CSC_LINK is missing."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) {
+            throw "WIN_CSC_KEY_PASSWORD is missing."
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP "VARUGAI-CodeSigning.pfx"
+
+          try {
+            $pfxBytes = [Convert]::FromBase64String($env:WIN_CSC_LINK)
+          } catch {
+            throw "WIN_CSC_LINK is not valid Base64."
+          }
+
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          $pfxHash = (Get-FileHash $pfxPath -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Decoded PFX: $($pfxBytes.Length) bytes"
+          Write-Host "Decoded PFX SHA-256: $pfxHash"
+
+          "SIGNING_PFX_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SIGNING_CERT_THUMBPRINT=649E4ECDD987BE1AC19BCD324A78203BECB2265E" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build signed Windows installer, portable build and unpacked directory
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          CSC_LINK: ${{ env.SIGNING_PFX_PATH }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ env.SIGNING_PFX_PATH }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npx electron-builder --win nsis portable dir --publish never
+
+      - name: Build unsigned Windows artifacts for fork pull request
+        if: env.SIGNING_ENABLED != 'true'
+        run: npx electron-builder --win nsis portable dir --publish never
+
+      - name: Verify Authenticode signatures
+        if: env.SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $targets = @(Get-ChildItem "release" -Recurse -File -Filter "*.exe")
+          if ($targets.Count -lt 3) {
+            throw "Expected at least installer, portable executable, and unpacked application executable; found $($targets.Count)."
+          }
+
+          foreach ($target in $targets) {
+            $signature = Get-AuthenticodeSignature $target.FullName
+
+            if (-not $signature.SignerCertificate) {
+              throw "No Authenticode signer certificate: $($target.FullName)"
+            }
+
+            if ($signature.SignerCertificate.Thumbprint -ne $env:SIGNING_CERT_THUMBPRINT) {
+              throw "Unexpected signer on $($target.FullName). Expected $env:SIGNING_CERT_THUMBPRINT, got $($signature.SignerCertificate.Thumbprint)."
+            }
+
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::HashMismatch) {
+              throw "Authenticode hash mismatch: $($target.FullName)"
+            }
+
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::NotSigned) {
+              throw "EXE is not Authenticode signed: $($target.FullName)"
+            }
+
+            if ($signature.Status -notin @(
+              [System.Management.Automation.SignatureStatus]::Valid,
+              [System.Management.Automation.SignatureStatus]::UnknownError
+            )) {
+              throw "Unexpected Authenticode status on $($target.FullName): $($signature.Status) — $($signature.StatusMessage)"
+            }
+
+            if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::UnknownError -and
+                $signature.StatusMessage -notmatch 'not trusted|root certificate') {
+              throw "Unexpected signature verification error on $($target.FullName): $($signature.StatusMessage)"
+            }
+
+            Write-Host "SIGNED PASS: $($target.FullName)"
+            Write-Host "  Status: $($signature.Status)"
+            Write-Host "  Subject: $($signature.SignerCertificate.Subject)"
+            Write-Host "  Thumbprint: $($signature.SignerCertificate.Thumbprint)"
+          }
 
       - name: Generate SHA-256 checksums
         run: npm run checksums
@@ -83,3 +174,11 @@ jobs:
             release/*win-unpacked.zip
             release/*source.zip
           if-no-files-found: error
+
+      - name: Remove signing material from runner
+        if: always() && env.SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_PFX_PATH -and (Test-Path $env:SIGNING_PFX_PATH)) {
+            Remove-Item $env:SIGNING_PFX_PATH -Force
+          }
