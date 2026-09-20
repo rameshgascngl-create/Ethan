@@ -37,6 +37,7 @@ jobs:
       - name: Run tests (syntax check + Electron smoke test)
         run: npm test
 
+      # Fresh secret validation after PFX/password rotation.
       - name: Prepare Windows signing material
         if: env.SIGNING_ENABLED == 'true'
         shell: pwsh
