@@ -38,6 +38,7 @@ jobs:
         run: npm test
 
       # Fresh secret validation after PFX/password rotation.
+      # Fresh validation after WIN_CSC_LINK refresh.
       - name: Prepare Windows signing material
         if: env.SIGNING_ENABLED == 'true'
         shell: pwsh
