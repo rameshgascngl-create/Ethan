@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#eceee9">
+<title>VARUGAI 15 — Semester Grid</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+<header class="mast">
+  <h1>VARUGAI 15</h1>
+  <p class="sub">Semester attendance grid</p>
+  <p class="credit">Department of Zoology, GASC, Nagercoil / Created by R. Ramesh</p>
+  <div class="regbar">
+    <select id="regSel" aria-label="Class or course register"></select>
+    <button class="btn g" id="newReg">+ New class</button>
+  </div>
+</header>
+
+<!-- SETUP -->
+<section id="t-setup" class="on">
+  <h2>Semester setup</h2>
+  <p class="hint">MSU assesses eligibility course by course, so keep one register per course. Defaults follow the published bands: 75% required, 65–74% condonation on payment of the fee, 50–64% condonation with a medical certificate, below 50% repeat. Confirm them against your current regulation before relying on them.</p>
+  <p class="hint">Set the class and the date range, generate the calendar, then switch off holidays and set the hours actually taken on any short day.</p>
+  <div class="acts" style="margin:0 0 12px">
+    <button class="btn g" id="dupReg">Duplicate this class</button>
+    <button class="btn d" id="delReg">Delete this register</button>
+  </div>
+  <p class="hint" style="margin-top:0">Switch between classes with the selector at the top of the screen. <b>Duplicate</b> copies the roster and the calendar into a new register with no attendance — use it for a second course taught to the same class.</p>
+  <div class="grid3">
+    <div style="flex:2 1 260px"><label>Institution</label><input id="institution" placeholder="Government Arts and Science College, Nagercoil - 4"></div>
+    <div><label>Department</label><input id="department" placeholder="Zoology"></div>
+    <div><label>Faculty in charge</label><input id="faculty" placeholder="R. Ramesh"></div>
+    <div><label>Course code</label><input id="courseCode" placeholder="ZY5C01"></div>
+    <div><label>Course title</label><input id="courseTitle" placeholder="Genetics and Evolution"></div>
+    <div><label>Class / Programme</label><input id="className" placeholder="I B.Sc. Zoology"></div>
+    <div><label>Semester</label><input id="semester" placeholder="Semester I"></div>
+    <div><label>Academic year</label><input id="acadYear" placeholder="2026–2027"></div>
+    <div><label>Start date</label><input type="date" id="startDate"></div>
+    <div><label>End date</label><input type="date" id="endDate"></div>
+    <div><label>Default hours per day</label><input type="number" id="defHours" value="5" min="1" max="8"></div>
+  </div>
+  <div class="grid3">
+    <div><label>Pass mark (%)</label><input type="number" id="passMark" value="75" min="0" max="100"></div>
+    <div><label>Condonation, fee only (%)</label><input type="number" id="condFee" value="65" min="0" max="100"></div>
+    <div><label>Condonation, fee + medical (%)</label><input type="number" id="condMed" value="50" min="0" max="100"></div>
+    <div><label>Verify band (± points)</label><input type="number" id="bandPts" value="3" min="0" max="20"></div>
+    <div><label>Regulation in force</label><input id="rulesetLabel" placeholder="MSU UG, 2024–25 batch"></div>
+    <div><label>Hide % below this many hours</label><input type="number" id="minHours" value="50" min="1"></div>
+  </div>
+  <div style="margin-bottom:6px"><label>Generate the calendar on these weekdays</label>
+    <label class="dow"><input type="checkbox" id="dow1" checked>Mon</label>
+    <label class="dow"><input type="checkbox" id="dow2" checked>Tue</label>
+    <label class="dow"><input type="checkbox" id="dow3" checked>Wed</label>
+    <label class="dow"><input type="checkbox" id="dow4" checked>Thu</label>
+    <label class="dow"><input type="checkbox" id="dow5" checked>Fri</label>
+    <label class="dow"><input type="checkbox" id="dow6">Sat</label>
+    <label class="dow"><input type="checkbox" id="dow0">Sun</label>
+  </div>
+  <div class="acts">
+    <button class="btn" id="genDays">Generate calendar</button>
+    <button class="btn g" id="saveMeta">Save settings</button>
+  </div>
+  <details class="fold">
+    <summary>Working days — holidays, short days and special Saturdays</summary>
+    <div class="body">
+      <p class="hint">Every date is explicitly Working or Holiday. An excluded day contributes nothing to any student's denominator.</p>
+      <div class="acts" style="margin-top:0">
+        <button class="btn g" data-bulk="satOn">All Saturdays working</button>
+        <button class="btn g" data-bulk="satOff">All Saturdays holiday</button>
+        <button class="btn g" data-bulk="sunOff">All Sundays holiday</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div><label>Add a day outside the calendar</label><input type="date" id="addDate"></div>
+        <div><label>Hours</label><input type="number" id="addHours" value="5" min="1" max="8"></div>
+        <div><label>&nbsp;</label><button class="btn g" id="addDay">+ Add working day</button></div>
+      </div>
+      <div class="row">
+        <div style="flex:2 1 200px"><label>Copy the calendar from another register</label><select id="copyFrom"></select></div>
+        <div><label>&nbsp;</label><button class="btn g" id="doCopy">Copy in</button></div>
+      </div>
+      <div class="scroll" style="max-height:44vh"><div id="dayList" style="padding:8px"></div></div>
+    </div>
+  </details>
+</section>
+
+<!-- ROSTER -->
+<section id="t-roster">
+  <h2>Roster</h2>
+  <div style="border:1px solid var(--edge);border-radius:4px;padding:12px;margin-bottom:14px;background:var(--card)">
+    <label for="listFile" style="font-size:14px">Upload an existing name list</label>
+    <p class="hint" style="margin:4px 0 8px">CSV, TSV, plain text, Excel (.xlsx) or Word (.docx). If the list exists digitally anywhere, use this — it cannot mistype a name.</p>
+    <input type="file" id="listFile" accept=".csv,.tsv,.txt,.xlsx,.docx">
+    <div id="mapPane"></div>
+  </div>
+  <div class="grid3">
+    <div><label>Line format</label><select id="hasRegNo"><option value="0">roll, name</option><option value="1">roll, register number, name</option></select></div>
+  </div>
+
+  <p class="hint">One student per line as <code>roll, name</code>. Order is kept exactly as typed — register order, never alphabetical. A student admitted later goes at the bottom with a start date.</p>
+  <textarea id="rosterText" spellcheck="false" placeholder="1, Abishek J.B&#10;2, Chandru M&#10;3, Chandru R"></textarea>
+  <div class="acts"><button class="btn" id="impRoster">Import / update roster</button>
+    <button class="btn g" id="rosterXlsx">Export roster to Excel</button>
+    <button class="btn g" id="clearDates">Clear all enrolment dates</button></div>
+  <p class="stat" id="rosterStat"></p>
+  <div id="rosterTable"></div>
+</section>
+
+<!-- GRID -->
+<section id="t-grid">
+  <h2>Semester grid</h2>
+  <p class="hint">Every student, every hour of the semester. One tap per student per day. The cell cycles blank → present → absent → on duty. Use <b>All P</b> to fill a whole day, then tap only the absentees. Press <b>Complete</b> when the day is finished — that is what puts the day into the percentage.</p>
+  <div class="pager">
+    <button class="btn g" id="prevW">◀ Earlier</button>
+    <span class="stat" id="winLabel" style="margin:0"></span>
+    <button class="btn g" id="nextW">Later ▶</button>
+    <button class="btn g" id="todayBtn">Today</button>
+    <button class="btn g" id="undoBtn" disabled>Undo</button>
+    <select id="dayFilter" style="width:auto"><option value="pending" selected>Still to enter</option><option value="all">All days</option></select>
+    <select id="winSize" style="width:auto"><option value="4">4 days</option><option value="6">6 days</option><option value="10">10 days</option><option value="15">15 days</option><option value="25" selected>25 days</option><option value="40">40 days</option><option value="0">Whole semester</option></select>
+    <select id="jumpTo" style="width:auto;max-width:170px"></select>
+  </div>
+  <div class="legend">
+    <span><i style="border-color:var(--stamp);background:rgba(47,107,79,.18)"></i>Present</span>
+    <span><i style="border-color:var(--bad);background:rgba(168,50,42,.12)"></i>Absent</span>
+    <span><i style="border-color:var(--od);background:rgba(47,79,138,.14)"></i>On duty (counts present)</span>
+    <span><i style="border-color:var(--amber);background:rgba(138,106,31,.16)"></i>Part day from an earlier entry — tap to set it whole</span>
+    <span><i style="border-color:var(--edge)"></i>Not yet entered — counts for nothing</span>
+  </div>
+  <div class="scroll"><table class="m" id="matrix"></table></div>
+  <p class="stat" id="gridStat"></p>
+</section>
+
+<!-- SUMMARY -->
+<section id="t-summary">
+  <h2>Summary</h2>
+  <div id="sumStats" class="stat"></div>
+  <div class="row" style="margin-top:10px"><div style="flex:1 1 220px"><label>Show</label>
+    <select id="sumFilter">
+      <option value="all">All students</option>
+      <option value="elig">Eligible only</option>
+      <option value="fee">Condonation — fee</option>
+      <option value="med">Condonation — fee + medical</option>
+      <option value="rep">Repeat / shortage</option>
+      <option value="band">Near the threshold</option>
+      <option value="thin">Too few hours</option>
+    </select></div></div>
+  <div class="scroll" style="max-height:60vh"><div id="sumTable"></div></div>
+  <h2 style="margin-top:22px">Integrity</h2>
+  <ul class="ck" id="checks"></ul>
+  <div id="gapBox"></div>
+  <h2 style="margin-top:22px">Needs attention</h2>
+  <div id="attnBox"></div>
+</section>
+
+<!-- DATA -->
+<section id="t-data">
+  <h2>Export and backup</h2>
+  <p class="hint">Everything is stored in this browser on this device only. Export after every session.</p>
+  <div class="acts">
+    <button class="btn" id="expXlsx">Excel workbook (.xlsx)</button>
+    <button class="btn g" id="expCsv">Summary CSV</button>
+    <button class="btn g" id="expJson">Full JSON backup</button>
+    <button class="btn g" id="impBtn">Restore backup</button>
+    <input type="file" id="impFile" accept=".json,application/json" hidden>
+  </div>
+  <p class="stat" id="dataStat"></p>
+  <div id="storeBox"></div>
+  <h2 style="margin-top:22px">Attendance statement</h2>
+  <p class="hint">A one-page statement for the office, with the signature blocks. Print it, or save it as a file you can open and print anywhere.</p>
+  <div class="row">
+    <div><label>Include</label><select id="stFilter">
+      <option value="all">All students</option>
+      <option value="short">Below the pass mark only</option>
+      <option value="fee">Condonation — fee</option>
+      <option value="med">Condonation — fee + medical</option>
+      <option value="rep">Repeat / shortage</option>
+      <option value="band">Near the threshold</option>
+    </select></div>
+    <div><label>Statement dated</label><input type="date" id="stDate"></div>
+  </div>
+  <div class="acts">
+    <button class="btn" id="stBuild">Build statement</button>
+    <button class="btn g" id="stPrint">Print</button>
+    <button class="btn g" id="stSave">Save as a file</button>
+    <button class="btn g" id="stPdf">Save as PDF</button>
+  </div>
+  <h2 style="margin-top:22px">Correction log</h2>
+  <p class="hint">Only edits made after a day was completed are logged. Bulk fills on an open day are not corrections and are not recorded.</p>
+  <div class="scroll" style="max-height:40vh"><div id="auditBox"></div></div>
+  <div class="note bad">Restoring a backup replaces everything currently held. Export first.</div>
+</section>
+</div>
+
+<div id="saveBadge" role="status" aria-live="polite"></div>
+<div id="stmt"></div>
+<nav class="tabs" id="nav">
+  <button data-t="setup" aria-selected="true">Setup</button>
+  <button data-t="roster">Roster</button>
+  <button data-t="grid">Grid</button>
+  <button data-t="summary">Summary</button>
+  <button data-t="data">Export</button>
+</nav>
+
+<script src="app.js"></script>
+</body>
+</html>
