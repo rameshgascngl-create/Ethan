@@ -43,11 +43,12 @@ host = text(ANDROID / "app" / "src" / "main" / "java" / "com" / "gasczoology" / 
 js = text(ASSETS / "app.js")
 html = text(ASSETS / "index.html")
 css = text(ASSETS / "styles.css")
+privacy = text(ASSETS / "privacy.html")
 
 # Android identity and release posture.
 require('applicationId = "com.gasczoology.varugai"' in gradle, "wrong/missing applicationId")
-require('versionCode = 15103' in gradle, "wrong/missing versionCode")
-require('versionName = "15.1.3"' in gradle, "wrong/missing versionName")
+require('versionCode = 15104' in gradle, "wrong/missing versionCode")
+require('versionName = "15.1.4"' in gradle, "wrong/missing versionName")
 require('minSdk = 24' in gradle, "wrong/missing minSdk")
 require('targetSdk = 36' in gradle, "wrong/missing targetSdk")
 require('compileSdk = 36' in gradle, "wrong/missing compileSdk")
@@ -75,6 +76,19 @@ require('addJavascriptInterface(VarugaiBridge(), "VarugaiAndroid")' in host, "ex
 require('fun saveExcel' not in host, "Android bridge must not expose saveExcel; generic MIME-aware saveBase64 must be used")
 require('fun saveBase64' in host and 'fun printPage' in host and 'fun recoverySnapshot' in host,
         "required native bridge methods missing")
+
+# Indus Appstore privacy-policy accessibility correction.
+PRIVACY_URL = "https://rameshgascngl-create.github.io/Zoology-and-Life-Sciences-Digital-Learning-Resources/varugai/privacy-policy.html"
+require(PRIVACY_URL in host, "public Privacy Policy URL missing from native host")
+require(PRIVACY_URL in privacy, "public Privacy Policy URL missing from bundled privacy page")
+require("VARUGAI Attendance Ledger" in privacy, "bundled Privacy Policy does not identify VARUGAI")
+require("com.gasczoology.varugai" in privacy, "bundled Privacy Policy package identity is wrong")
+require("privacyPolicyLink" in host and "PRIVACY_LOCAL_URL" in host,
+        "visible in-app Privacy Policy entry point missing")
+require("Intent.ACTION_VIEW" in host and "uri.toString() == PRIVACY_POLICY_URL" in host,
+        "public Privacy Policy is not delegated to the external browser")
+require("android.permission.INTERNET" not in manifest,
+        "privacy correction must not add INTERNET permission")
 
 
 # Device-QA regression gate for the native inset correction.

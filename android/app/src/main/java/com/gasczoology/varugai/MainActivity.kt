@@ -41,6 +41,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val APP_ORIGIN = "https://appassets.androidplatform.net"
         private const val START_URL = "$APP_ORIGIN/assets/index.html"
+        private const val PRIVACY_LOCAL_URL = "$APP_ORIGIN/assets/privacy.html"
+        private const val PRIVACY_POLICY_URL = "https://rameshgascngl-create.github.io/Zoology-and-Life-Sciences-Digital-Learning-Resources/varugai/privacy-policy.html"
         private const val MAX_EXPORT_BYTES = 40 * 1024 * 1024
         private const val MAX_RECOVERY_BYTES = 8 * 1024 * 1024
         private const val EXIT_WINDOW_MS = 2200L
@@ -155,6 +157,11 @@ class MainActivity : AppCompatActivity() {
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
+                if (uri.toString() == PRIVACY_POLICY_URL) {
+                    openPrivacyPolicyInBrowser()
+                    return true
+                }
+
                 val trusted = uri.scheme == "https" && uri.host == "appassets.androidplatform.net"
                 if (!trusted) {
                     toast("External navigation is blocked in VARUGAI")
@@ -170,6 +177,14 @@ class MainActivity : AppCompatActivity() {
                     "(function(){" +
                         "var p=document.getElementById('stPdf');if(p)p.style.display='none';" +
                         "var b=document.getElementById('stPrint');if(b)b.textContent='Print / Save PDF';" +
+                        "var m=document.querySelector('.mast');" +
+                        "if(m&&!document.getElementById('privacyPolicyLink')){" +
+                          "var d=document.createElement('div');d.className='acts';d.style.marginTop='8px';" +
+                          "var q=document.createElement('button');q.id='privacyPolicyLink';q.className='btn g';" +
+                          "q.textContent='Privacy Policy';" +
+                          "q.addEventListener('click',function(){window.location.href='" + PRIVACY_LOCAL_URL + "';});" +
+                          "d.appendChild(q);m.appendChild(d);" +
+                        "}" +
                     "})()",
                     null
                 )
@@ -219,6 +234,17 @@ class MainActivity : AppCompatActivity() {
 
         val restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null
         if (!restored) webView.loadUrl(START_URL)
+    }
+
+    private fun openPrivacyPolicyInBrowser() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            toast("No browser is available to open the Privacy Policy")
+        }
     }
 
     private fun handleNormalBack() {
